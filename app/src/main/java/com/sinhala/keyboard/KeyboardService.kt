@@ -46,8 +46,8 @@ class KeyboardService : InputMethodService(),
         lifecycleRegistry = LifecycleRegistry(this)
         savedStateRegistryController = SavedStateRegistryController.create(this)
 
-        // ⭐ මේක අනිවාර්යයි - Compose එකට මේක නැතුව වැඩ කරන්න බෑ
-        savedStateRegistryController.performAttach(lifecycleRegistry)
+        // ⭐ මෙතන තමයි error එක තිබ්බෙ. දැන් හරි! Arguments අවශ්‍ය නෑ.
+        savedStateRegistryController.performAttach()
         savedStateRegistryController.performRestore(null)
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -96,13 +96,11 @@ class KeyboardService : InputMethodService(),
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         Prefs.refresh()
-        // Keyboard එක පෙන්නනකොට state එක RESUMED කරන්න ඕන
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        // Keyboard එක හැංගුවම PAUSE කරන්න ඕන
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
     }
 

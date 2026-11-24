@@ -1,7 +1,6 @@
 package com.sinhala.keyboard
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
@@ -13,14 +12,15 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
-import androidx.compose.ui.graphics.toArgb
 
 class KeyboardService : InputMethodService() {
 
@@ -29,13 +29,17 @@ class KeyboardService : InputMethodService() {
     private var shift = false
     private var romanBuffer = ""
     private var clipboardManager: ClipboardManager? = null
+    
+    // Overlay එක පෙන්නන්න මේක පාවිච්චි කරනවා
+    private var mainContainer: FrameLayout? = null
 
-    // Flashboard Style Colors
-    private val bgColor = Color.parseColor("#0A0A0A")
-    private val keyBgColor = Color.parseColor("#2C2C2E")
-    private val keyPressedColor = Color.parseColor("#505050")
-    private val modKeyBgColor = Color.parseColor("#1C1C1E")
+    // 🎨 Colors (Flashboard Dark Theme)
+    private val bgColor = Color.parseColor("#000000")
+    private val keyBgColor = Color.parseColor("#1C1C1E")
+    private val keyPressedColor = Color.parseColor("#3A3A3C")
+    private val modKeyBgColor = Color.parseColor("#2C2C2E")
     private val textColor = Color.WHITE
+    private val subTextColor = Color.parseColor("#888888")
     private val accentColor = Color.parseColor("#8B5CF6")
 
     // Transliteration Maps
@@ -43,20 +47,21 @@ class KeyboardService : InputMethodService() {
     private val cons = mapOf("kh" to "ඛ", "gh" to "ඝ", "ng" to "ං", "ch" to "ඡ", "jh" to "ඣ", "ny" to "ඤ", "Th" to "ඨ", "Dh" to "ඪ", "th" to "ථ", "dh" to "ධ", "ph" to "ඵ", "bh" to "භ", "sh" to "ශ", "k" to "ක", "g" to "ග", "c" to "ච", "j" to "ජ", "T" to "ට", "D" to "ඩ", "N" to "ණ", "t" to "ත", "d" to "ද", "n" to "න", "p" to "ප", "b" to "බ", "m" to "ම", "y" to "ය", "r" to "ර", "l" to "ල", "L" to "ළ", "v" to "ව", "w" to "ව", "S" to "ෂ", "s" to "ස", "h" to "හ", "f" to "ෆ")
     private val signs = mapOf("aa" to "ා", "aae" to "ෑ", "ae" to "ැ", "ai" to "ෛ", "au" to "ෞ", "ii" to "ී", "uu" to "ූ", "a" to "", "i" to "ි", "u" to "ු", "e" to "ෙ", "E" to "ේ", "o" to "ො", "O" to "ෝ")
 
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-        // Clipboard History Auto-Save
         clipboardManager?.addPrimaryClipChangedListener {
             val clip = clipboardManager?.primaryClip
             if (clip != null && clip.itemCount > 0) {
                 val text = clip.getItemAt(0).text?.toString() ?: ""
-                if (text.isNotEmpty()) {
-                    Prefs.addClipboardItem(text)
-                }
+                if (text.isNotEmpty()) Prefs.addClipboardItem(text)
             }
         }
     }
@@ -66,37 +71,45 @@ class KeyboardService : InputMethodService() {
         Prefs.refresh()
         mode = Prefs.language.value
 
+        // ⭐ Crash නොවී Popup පෙන්නන්න මේ FrameLayout එක පාවිච්චි කරනවා
+        val frameRoot = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+        }
+        mainContainer = frameRoot
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bgColor)
-            setPadding(0, 10, 0, 20)
+            setPadding(dpToPx(8), dpToPx(10), dpToPx(8), dpToPx(16))
         }
 
         root.addView(createToolbar())
 
         val keyboardContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(8, 8, 8, 0)
         }
 
         val rows = listOf(
             listOf("q" to "1", "w" to "2", "e" to "3", "r" to "4", "t" to "5", "y" to "6", "u" to "7", "i" to "8", "o" to "9", "p" to "0"),
             listOf("a" to "@", "s" to "#", "d" to "$", "f" to "%", "g" to "&", "h" to "*", "j" to "-", "k" to "+", "l" to "("),
             listOf("SHIFT" to "", "z" to ")", "x" to "\"", "c" to ":", "v" to ";", "b" to "!", "n" to "?", "m" to "/", "DEL" to ""),
-            listOf("123" to "", "GLOBE" to "", "comma" to "", "space" to "Sinhala Keyboard", "period" to "", "ENTER" to "")
+            listOf("123" to "", "GLOBE" to "", "comma" to "", "space" to "", "period" to "", "ENTER" to "")
         )
 
-        rows.forEach { row ->
+        rows.forEachIndexed { index, row ->
             val rowLayout = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { setMargins(0, 0, 0, 10) }
+                val height = if (index == 3) dpToPx(54) else dpToPx(52)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, height).apply {
+                    setMargins(0, 0, 0, dpToPx(8))
+                }
             }
 
             row.forEach { (key, subText) ->
                 val weight = when (key) {
-                    "space" -> 4.5f
-                    "SHIFT", "DEL", "ENTER" -> 1.5f
-                    "123", "GLOBE", "comma", "period" -> 1.2f
+                    "space" -> 4.0f
+                    "SHIFT", "DEL", "ENTER" -> 1.4f
+                    "123", "GLOBE", "comma", "period" -> 1.1f
                     else -> 1f
                 }
                 rowLayout.addView(createKeyView(key, subText, weight))
@@ -105,90 +118,162 @@ class KeyboardService : InputMethodService() {
         }
 
         root.addView(keyboardContainer)
-        return root
+        frameRoot.addView(root)
+        
+        return frameRoot
     }
 
     private fun createToolbar(): LinearLayout {
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(16, 0, 16, 15)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 120)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48))
         }
 
-        // Language Toggle
-        val langBtn = TextView(this).apply {
-            text = if (mode == "en") "En" else "සිං"
-            setTextColor(textColor)
-            textSize = 16f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(keyBgColor); setStroke(3, Color.GRAY) }
-            layoutParams = LinearLayout.LayoutParams(120, 120).apply { setMargins(0, 0, 20, 0) }
-            setOnClickListener { 
-                commitBuffer(); mode = if (mode == "en") "si" else "en"; Prefs.setLanguage(mode); setInputView(onCreateInputView()) 
+        fun createToolBtn(text: String, onClick: (() -> Unit)? = null): TextView {
+            return TextView(this).apply {
+                this.text = text
+                setTextColor(textColor)
+                textSize = if(text.length > 1) 14f else 20f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(modKeyBgColor)
+                }
+                layoutParams = LinearLayout.LayoutParams(0, dpToPx(40), 1f).apply {
+                    setMargins(dpToPx(6), 0, dpToPx(6), 0)
+                }
+                setOnClickListener { onClick?.invoke() }
             }
         }
+
+        val langBtn = createToolBtn(if (mode == "en") "En" else "සිං") {
+            commitBuffer()
+            mode = if (mode == "en") "si" else "en"
+            Prefs.setLanguage(mode)
+            setInputView(onCreateInputView())
+        }
         
-        // Emoji Button (Dummy for now)
-        val emojiBtn = TextView(this).apply {
-            text = "😊"
-            textSize = 24f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(keyBgColor) }
-            layoutParams = LinearLayout.LayoutParams(120, 120).apply { setMargins(0, 0, 20, 0) }
+        val emojiBtn = createToolBtn("😊")
+        
+        val clipBtn = createToolBtn("📋") {
+            showClipboardHistory()
         }
 
-        // Clipboard Button
-        val clipBtn = TextView(this).apply {
-            text = "📋"
-            textSize = 24f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(keyBgColor) }
-            layoutParams = LinearLayout.LayoutParams(120, 120).apply { setMargins(0, 0, 20, 0) }
-            setOnClickListener { showClipboardHistory() }
-        }
-
-        // Settings Button (Dummy)
-        val settingsBtn = TextView(this).apply {
-            text = "⚙️"
-            textSize = 24f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(keyBgColor) }
-            layoutParams = LinearLayout.LayoutParams(120, 120)
-        }
+        val settingsBtn = createToolBtn("⚙️")
 
         toolbar.addView(langBtn)
         toolbar.addView(emojiBtn)
         toolbar.addView(clipBtn)
         toolbar.addView(settingsBtn)
-        return toolbar
-    }
 
-    private fun showClipboardHistory() {
-        val history = Prefs.clipboardHistory.value
-        if (history.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("Clipboard History")
-                .setMessage("No copied items yet.\nCopy something from any app!")
-                .setPositiveButton("Close", null)
-                .show()
-            return
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(toolbar)
+            setPadding(0, 0, 0, dpToPx(10))
         }
 
-        // Native List Dialog එකක් පාවිච්චි කරන නිසා Crash බයක් නෑ
-        AlertDialog.Builder(this)
-            .setTitle("Clipboard History (Tap to paste)")
-            .setItems(history.toTypedArray()) { dialog, which ->
-                commitBuffer()
-                currentInputConnection?.commitText(history[which], 1)
-                dialog.dismiss()
-            }
-            .setNegativeButton("Clear All") { dialog, _ ->
+        return wrapper
+    }
+
+    // ⭐ අලුත් Clipboard History Popup එක (Crash නොවෙන විදිය)
+    private fun showClipboardHistory() {
+        val history = Prefs.clipboardHistory.value
+        
+        // මේක තමයි අලුත් Overlay එක
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F0000000")) // තද කළු පසුබිමක්
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            isClickable = true // යට තියෙන keys එබෙන එක නවත්තන්න
+        }
+
+        // Header එක (Title + Clear + Close)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dpToPx(12))
+        }
+
+        val title = TextView(this).apply {
+            text = "Clipboard"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val clearBtn = TextView(this).apply {
+            text = "Clear  "
+            setTextColor(Color.parseColor("#FF453A"))
+            textSize = 14f
+            setOnClickListener {
                 Prefs.clearClipboardHistory()
-                dialog.dismiss()
+                mainContainer?.removeView(overlay)
+                showClipboardHistory() // ආයෙ Refresh කරන්න
             }
-            .setPositiveButton("Close", null)
-            .show()
+        }
+
+        val closeBtn = TextView(this).apply {
+            text = "Close"
+            setTextColor(accentColor)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener { mainContainer?.removeView(overlay) }
+        }
+
+        header.addView(title)
+        header.addView(clearBtn)
+        header.addView(closeBtn)
+        overlay.addView(header)
+
+        val scrollView = ScrollView(this)
+        val listLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        
+        if (history.isEmpty()) {
+             val emptyText = TextView(this).apply {
+                 text = "No copied items yet."
+                 setTextColor(Color.GRAY)
+                 textSize = 14f
+                 gravity = Gravity.CENTER
+                 setPadding(0, dpToPx(20), 0, 0)
+             }
+             listLayout.addView(emptyText)
+        } else {
+            history.forEach { item ->
+                val tv = TextView(this).apply {
+                    text = item
+                    setTextColor(Color.WHITE)
+                    textSize = 16f
+                    setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+                    background = GradientDrawable().apply {
+                        setColor(keyBgColor)
+                        cornerRadius = dpToPx(8).toFloat()
+                    }
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        setMargins(0, 0, 0, dpToPx(8))
+                    }
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    setOnClickListener {
+                        commitBuffer()
+                        currentInputConnection?.commitText(item, 1)
+                        mainContainer?.removeView(overlay) // එබුවම Popup එක අයින් වෙනවා
+                    }
+                }
+                listLayout.addView(tv)
+            }
+        }
+        
+        scrollView.addView(listLayout)
+        overlay.addView(scrollView)
+
+        // අපේ ප්‍රධාන Frame එකට මේක එකතු කරනවා
+        mainContainer?.addView(overlay)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -196,10 +281,12 @@ class KeyboardService : InputMethodService() {
         val isMod = key in listOf("SHIFT", "DEL", "ENTER", "123", "GLOBE", "comma", "period", "space")
         
         val container = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT, weight).apply { setMargins(6, 0, 6, 0) }
+            layoutParams = LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT, weight).apply {
+                setMargins(dpToPx(3), 0, dpToPx(3), 0)
+            }
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 30f
+                cornerRadius = dpToPx(8).toFloat()
                 setColor(if (isMod) modKeyBgColor else keyBgColor)
             }
             isClickable = true
@@ -208,20 +295,22 @@ class KeyboardService : InputMethodService() {
         val mainText = TextView(this).apply {
             text = getKeyLabel(key)
             setTextColor(textColor)
-            textSize = if (key == "space") 14f else 22f
+            textSize = if (key == "space") 11f else 20f
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
             gravity = Gravity.CENTER
+            if (subText.isNotEmpty()) setPadding(0, dpToPx(6), 0, 0) 
+            
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
 
         if (subText.isNotEmpty()) {
             val subTextView = TextView(this).apply {
                 text = subText
-                setTextColor(Color.LTGRAY)
-                textSize = 12f
+                setTextColor(subTextColor)
+                textSize = 10f
                 gravity = Gravity.TOP or Gravity.END
                 layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(0, 15, 15, 0)
+                    setMargins(0, dpToPx(4), dpToPx(6), 0)
                     gravity = Gravity.TOP or Gravity.END
                 }
             }
@@ -257,7 +346,7 @@ class KeyboardService : InputMethodService() {
             "GLOBE" -> "🌐"
             "comma" -> ","
             "period" -> "."
-            "space" -> "Sinhala Keyboard"
+            "space" -> "" 
             else -> if (mode == "en" && shift) key.uppercase() else key
         }
     }
@@ -278,7 +367,7 @@ class KeyboardService : InputMethodService() {
             "ENTER" -> { commitBuffer(); sendEnterKey(ic) }
             "comma" -> { commitBuffer(); ic.commitText(",", 1) }
             "period" -> { commitBuffer(); ic.commitText(".", 1) }
-            "123", "GLOBE" -> { /* පස්සේ ඕන නම් 123 layer එක හදන්න පුළුවන් */ }
+            "123", "GLOBE" -> { /* Later */ }
             else -> {
                 if (mode == "si") {
                     romanBuffer += key.lowercase()

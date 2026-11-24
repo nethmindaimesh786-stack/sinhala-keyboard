@@ -19,7 +19,6 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.compose.ui.graphics.toArgb
 
@@ -31,6 +30,7 @@ class KeyboardService : InputMethodService() {
     private var romanBuffer = ""
     private var clipboardManager: ClipboardManager? = null
 
+    // Flashboard Style Colors
     private val bgColor = Color.parseColor("#0A0A0A")
     private val keyBgColor = Color.parseColor("#2C2C2E")
     private val keyPressedColor = Color.parseColor("#505050")
@@ -38,6 +38,7 @@ class KeyboardService : InputMethodService() {
     private val textColor = Color.WHITE
     private val accentColor = Color.parseColor("#8B5CF6")
 
+    // Transliteration Maps
     private val vowels = mapOf("aa" to "ආ", "aae" to "ඈ", "ae" to "ඇ", "ai" to "ඓ", "au" to "ඖ", "ii" to "ඊ", "uu" to "ඌ", "a" to "අ", "i" to "ඉ", "u" to "උ", "e" to "එ", "E" to "ඒ", "o" to "ඔ", "O" to "ඕ")
     private val cons = mapOf("kh" to "ඛ", "gh" to "ඝ", "ng" to "ං", "ch" to "ඡ", "jh" to "ඣ", "ny" to "ඤ", "Th" to "ඨ", "Dh" to "ඪ", "th" to "ථ", "dh" to "ධ", "ph" to "ඵ", "bh" to "භ", "sh" to "ශ", "k" to "ක", "g" to "ග", "c" to "ච", "j" to "ජ", "T" to "ට", "D" to "ඩ", "N" to "ණ", "t" to "ත", "d" to "ද", "n" to "න", "p" to "ප", "b" to "බ", "m" to "ම", "y" to "ය", "r" to "ර", "l" to "ල", "L" to "ළ", "v" to "ව", "w" to "ව", "S" to "ෂ", "s" to "ස", "h" to "හ", "f" to "ෆ")
     private val signs = mapOf("aa" to "ා", "aae" to "ෑ", "ae" to "ැ", "ai" to "ෛ", "au" to "ෞ", "ii" to "ී", "uu" to "ූ", "a" to "", "i" to "ි", "u" to "ු", "e" to "ෙ", "E" to "ේ", "o" to "ො", "O" to "ෝ")
@@ -48,7 +49,7 @@ class KeyboardService : InputMethodService() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-        // ⭐ අලුතෙන් යමක් Copy වෙනකොට ඒක අපේ history එකට එකතු කරනවා
+        // Clipboard History Auto-Save
         clipboardManager?.addPrimaryClipChangedListener {
             val clip = clipboardManager?.primaryClip
             if (clip != null && clip.itemCount > 0) {
@@ -115,6 +116,7 @@ class KeyboardService : InputMethodService() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 120)
         }
 
+        // Language Toggle
         val langBtn = TextView(this).apply {
             text = if (mode == "en") "En" else "සිං"
             setTextColor(textColor)
@@ -127,6 +129,7 @@ class KeyboardService : InputMethodService() {
             }
         }
         
+        // Emoji Button (Dummy for now)
         val emojiBtn = TextView(this).apply {
             text = "😊"
             textSize = 24f
@@ -135,7 +138,7 @@ class KeyboardService : InputMethodService() {
             layoutParams = LinearLayout.LayoutParams(120, 120).apply { setMargins(0, 0, 20, 0) }
         }
 
-        // ⭐ අලුත් Clipboard බටන් එක
+        // Clipboard Button
         val clipBtn = TextView(this).apply {
             text = "📋"
             textSize = 24f
@@ -145,6 +148,7 @@ class KeyboardService : InputMethodService() {
             setOnClickListener { showClipboardHistory() }
         }
 
+        // Settings Button (Dummy)
         val settingsBtn = TextView(this).apply {
             text = "⚙️"
             textSize = 24f
@@ -160,63 +164,28 @@ class KeyboardService : InputMethodService() {
         return toolbar
     }
 
-    // ⭐ Clipboard History එක පෙන්නන Popup එක
     private fun showClipboardHistory() {
         val history = Prefs.clipboardHistory.value
         if (history.isEmpty()) {
-            val tv = TextView(this).apply {
-                text = "No copied items yet.\nCopy something from any app!"
-                setTextColor(Color.WHITE)
-                setPadding(40, 40, 40, 40)
-                textSize = 16f
-                gravity = Gravity.CENTER
-            }
             AlertDialog.Builder(this)
                 .setTitle("Clipboard History")
-                .setView(tv)
+                .setMessage("No copied items yet.\nCopy something from any app!")
                 .setPositiveButton("Close", null)
                 .show()
             return
         }
 
-        // History එක තියෙනවා නම් List එකක් හදනවා
-        val scrollView = ScrollView(this)
-        val listLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(20, 20, 20, 20)
-        }
-
-        history.forEach { text ->
-            val itemView = TextView(this).apply {
-                this.text = text
-                setTextColor(Color.BLACK)
-                textSize = 16f
-                setPadding(30, 30, 30, 30)
-                setBackgroundColor(Color.parseColor("#F0F0F0"))
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(0, 0, 0, 15)
-                }
-                
-                // ඒක ක්ලික් කරාම type වෙනවා
-                setOnClickListener {
-                    commitBuffer()
-                    currentInputConnection?.commitText(text, 1)
-                    // Popup එක වහන්න
-                    (parent?.parent as? AlertDialog)?.dismiss()
-                }
-            }
-            listLayout.addView(itemView)
-        }
-        scrollView.addView(listLayout)
-
+        // Native List Dialog එකක් පාවිච්චි කරන නිසා Crash බයක් නෑ
         AlertDialog.Builder(this)
             .setTitle("Clipboard History (Tap to paste)")
-            .setView(scrollView)
-            .setNegativeButton("Clear All") { _, _ ->
-                Prefs.clipboardHistory.value = emptyList()
-                Prefs.setTheme(Prefs.theme.value) // trick to save empty list
-                // වෙනම clear method එකක් නැති නිසා මෙහෙම කළා
-                prefs?.edit()?.putString("clipboard_history", "")?.apply()
+            .setItems(history.toTypedArray()) { dialog, which ->
+                commitBuffer()
+                currentInputConnection?.commitText(history[which], 1)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Clear All") { dialog, _ ->
+                Prefs.clearClipboardHistory()
+                dialog.dismiss()
             }
             .setPositiveButton("Close", null)
             .show()
@@ -225,6 +194,7 @@ class KeyboardService : InputMethodService() {
     @SuppressLint("ClickableViewAccessibility")
     private fun createKeyView(key: String, subText: String, weight: Float): FrameLayout {
         val isMod = key in listOf("SHIFT", "DEL", "ENTER", "123", "GLOBE", "comma", "period", "space")
+        
         val container = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT, weight).apply { setMargins(6, 0, 6, 0) }
             background = GradientDrawable().apply {
@@ -308,7 +278,7 @@ class KeyboardService : InputMethodService() {
             "ENTER" -> { commitBuffer(); sendEnterKey(ic) }
             "comma" -> { commitBuffer(); ic.commitText(",", 1) }
             "period" -> { commitBuffer(); ic.commitText(".", 1) }
-            "123", "GLOBE" -> { /* පස්සේ හදමු */ }
+            "123", "GLOBE" -> { /* පස්සේ ඕන නම් 123 layer එක හදන්න පුළුවන් */ }
             else -> {
                 if (mode == "si") {
                     romanBuffer += key.lowercase()

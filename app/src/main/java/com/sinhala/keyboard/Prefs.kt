@@ -14,7 +14,7 @@ object Prefs {
     val soundOn = MutableStateFlow(false)
     val popupOn = MutableStateFlow(true)
     
-    // ⭐ Clipboard History
+    // Clipboard History
     val clipboardHistory = MutableStateFlow<List<String>>(emptyList())
 
     fun init(ctx: Context) {
@@ -32,7 +32,6 @@ object Prefs {
         soundOn.value = p.getBoolean("sound", false)
         popupOn.value = p.getBoolean("popup", true)
         
-        // Load clipboard history (String එකක් විදියට save කරලා තියෙන්නේ)
         val historyString = p.getString("clipboard_history", "") ?: ""
         clipboardHistory.value = if (historyString.isEmpty()) emptyList() else historyString.split("|||")
     }
@@ -62,17 +61,20 @@ object Prefs {
         prefs?.edit()?.putBoolean("popup", b)?.apply()
     }
     
-    // ⭐ අලුත් කෑල්ලක් Copy කරද්දි මේකට එකතු වෙනවා
     fun addClipboardItem(text: String) {
         if (text.isBlank()) return
         val current = clipboardHistory.value.toMutableList()
-        if (current.contains(text)) current.remove(text) // එකම දේ දෙපාරක් ආවොත් උඩට ගන්නවා
+        if (current.contains(text)) current.remove(text)
         current.add(0, text)
         
-        val newList = if (current.size > 10) current.take(10) else current // උපරිම 10ක් තියාගන්නවා
+        val newList = if (current.size > 10) current.take(10) else current
         clipboardHistory.value = newList
-        
-        // Save වෙන්න "|||" කියන ලකුණෙන් වෙන් කරලා save කරනවා
         prefs?.edit()?.putString("clipboard_history", newList.joinToString("|||"))?.apply()
+    }
+
+    // ⭐ අලුතෙන් එකතු කළ Clear function එක
+    fun clearClipboardHistory() {
+        clipboardHistory.value = emptyList()
+        prefs?.edit()?.putString("clipboard_history", "")?.apply()
     }
 }

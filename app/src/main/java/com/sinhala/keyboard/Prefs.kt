@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 object Prefs {
     private const val NAME = "kb_settings"
-    private var prefs: SharedPreferences? = null
+    var prefs: SharedPreferences? = null
+        private set
 
     val theme = MutableStateFlow("violet")
     val language = MutableStateFlow("en")
@@ -14,7 +15,6 @@ object Prefs {
     val soundOn = MutableStateFlow(false)
     val popupOn = MutableStateFlow(true)
     
-    // Clipboard History
     val clipboardHistory = MutableStateFlow<List<String>>(emptyList())
 
     fun init(ctx: Context) {
@@ -72,7 +72,6 @@ object Prefs {
         prefs?.edit()?.putString("clipboard_history", newList.joinToString("|||"))?.apply()
     }
 
-    // ⭐ අලුතෙන් එකතු කළ Clear function එක
     fun clearClipboardHistory() {
         clipboardHistory.value = emptyList()
         prefs?.edit()?.putString("clipboard_history", "")?.apply()

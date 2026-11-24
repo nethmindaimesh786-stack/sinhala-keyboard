@@ -45,14 +45,13 @@ class KeyboardService : InputMethodService(),
 
         lifecycleRegistry = LifecycleRegistry(this)
         savedStateRegistryController = SavedStateRegistryController.create(this)
-        
-        // ⭐ මේක තමයි crash එක හැදෙන තැන: performAttach අනිවාර්යයි
-        savedStateRegistryController.performAttach()
+
+        // ⭐ මේක අනිවාර්යයි - Compose එකට මේක නැතුව වැඩ කරන්න බෑ
+        savedStateRegistryController.performAttach(lifecycleRegistry)
         savedStateRegistryController.performRestore(null)
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
     override fun onCreateInputView(): View {
@@ -60,10 +59,14 @@ class KeyboardService : InputMethodService(),
             ComposeView(this).apply {
                 isFocusable = false
                 isFocusableInTouchMode = false
+                
+                // Compose ට අවශ්‍ය දේවල් View Tree එකට set කිරීම
                 setViewTreeLifecycleOwner(this@KeyboardService)
                 setViewTreeViewModelStoreOwner(this@KeyboardService)
                 setViewTreeSavedStateRegistryOwner(this@KeyboardService)
+                
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+
                 setContent {
                     KeyboardTheme {
                         KeyboardUI(
@@ -77,39 +80,34 @@ class KeyboardService : InputMethodService(),
                 }
             }
         } catch (e: Throwable) {
-            // Crash වෙනවා වෙනුවට error message එක පෙන්නන්න
+            // Error එකක් ආවොත් crash නොවී රතු පාටින් පෙන්නන්න
             e.printStackTrace()
-            val tv = TextView(this).apply {
-                text = "Keyboard Error: ${e.message}\n\n${e.stackTraceToString().take(300)}"
+            TextView(this).apply {
+                text = "Keyboard Error:\n${e.message}\n\n${e.stackTraceToString().take(250)}"
                 setTextColor(Color.RED)
                 setBackgroundColor(Color.WHITE)
                 textSize = 12f
                 gravity = Gravity.CENTER
                 setPadding(20, 20, 20, 20)
             }
-            tv
         }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         Prefs.refresh()
-        if (lifecycleRegistry.currentState != Lifecycle.State.RESUMED) {
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-        }
+        // Keyboard එක පෙන්නනකොට state එක RESUMED කරන්න ඕන
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        if (lifecycleRegistry.currentState == Lifecycle.State.RESUMED) {
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        }
+        // Keyboard එක හැංගුවම PAUSE කරන්න ඕන
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
     }
 
     override fun onDestroy() {
-        if (lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-        }
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
     }

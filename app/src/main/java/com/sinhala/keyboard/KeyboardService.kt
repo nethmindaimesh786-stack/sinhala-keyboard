@@ -2,7 +2,6 @@ package com.sinhala.keyboard
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
@@ -16,6 +15,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb // ⭐ මේක තමයි අලුතෙන් එකතු වුනේ
 
 class KeyboardService : InputMethodService() {
 
@@ -26,7 +26,6 @@ class KeyboardService : InputMethodService() {
     private var shift = false
     private var romanBuffer = ""
 
-    // Transliteration Maps
     private val vowels = mapOf(
         "aa" to "ආ", "aae" to "ඈ", "ae" to "ඇ", "ai" to "ඓ", "au" to "ඖ",
         "ii" to "ඊ", "uu" to "ඌ", "a" to "අ", "i" to "ඉ", "u" to "උ",
@@ -59,7 +58,8 @@ class KeyboardService : InputMethodService() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(currentTheme.kbBg[1].value.toInt())
+            // ⭐ මෙතන .toArgb() පාවිච්චි කළා
+            setBackgroundColor(currentTheme.kbBg[1].toArgb()) 
             setPadding(10, 15, 10, 25)
         }
 
@@ -95,20 +95,19 @@ class KeyboardService : InputMethodService() {
                     }
                     gravity = Gravity.CENTER
                     text = getKeyLabel(key)
-                    setTextColor(currentTheme.keyText.value.toInt())
+                    // ⭐ මෙතනත් .toArgb()
+                    setTextColor(currentTheme.keyText.toArgb()) 
                     textSize = if (key == "space") 12f else if (isSpecial) 14f else 20f
                     isClickable = true
                     
-                    // Background Shape (Rounded)
                     background = createKeyBackground(isSpecial, key == "LANG" || (key == "SHIFT" && shift))
                 }
 
-                // Touch Feedback (No Lag)
                 keyView.setOnTouchListener { v, event ->
                     when (event.action) {
                         MotionEvent.ACTION_DOWN -> {
                             v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(50).start()
-                            (v.background as GradientDrawable).setColor(currentTheme.accent.value.toInt())
+                            (v.background as GradientDrawable).setColor(currentTheme.accent.toArgb())
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             v.animate().scaleX(1f).scaleY(1f).setDuration(50).start()
@@ -145,14 +144,15 @@ class KeyboardService : InputMethodService() {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 25f
             if (isHighlight) {
-                colors = intArrayOf(currentTheme.accentGradient[0].value.toInt(), currentTheme.accentGradient[1].value.toInt())
+                // ⭐ .toArgb() නිසා දැන් පාට හරියටම වැඩ කරයි
+                colors = intArrayOf(currentTheme.accentGradient[0].toArgb(), currentTheme.accentGradient[1].toArgb())
                 orientation = GradientDrawable.Orientation.TL_BR
             } else if (isSpecial) {
-                setColor(currentTheme.keyBgMod.value.toInt())
-                setStroke(2, currentTheme.border.value.toInt())
+                setColor(currentTheme.keyBgMod.toArgb())
+                setStroke(2, currentTheme.border.toArgb())
             } else {
-                setColor(currentTheme.keyBg.value.toInt())
-                setStroke(2, currentTheme.border.value.toInt())
+                setColor(currentTheme.keyBg.toArgb())
+                setStroke(2, currentTheme.border.toArgb())
             }
         }
     }
@@ -211,7 +211,6 @@ class KeyboardService : InputMethodService() {
     }
 
     private fun recreateInputView() {
-        // Keyboard එකේ UI එක update වෙන්න අලුතෙන් view එක හදනවා
         setInputView(onCreateInputView())
     }
 

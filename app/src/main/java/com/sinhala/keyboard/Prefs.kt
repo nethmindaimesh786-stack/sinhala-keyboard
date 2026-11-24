@@ -13,6 +13,9 @@ object Prefs {
     val vibrateOn = MutableStateFlow(true)
     val soundOn = MutableStateFlow(false)
     val popupOn = MutableStateFlow(true)
+    
+    // ⭐ Clipboard History
+    val clipboardHistory = MutableStateFlow<List<String>>(emptyList())
 
     fun init(ctx: Context) {
         if (prefs == null) {
@@ -28,6 +31,10 @@ object Prefs {
         vibrateOn.value = p.getBoolean("vibrate", true)
         soundOn.value = p.getBoolean("sound", false)
         popupOn.value = p.getBoolean("popup", true)
+        
+        // Load clipboard history (String එකක් විදියට save කරලා තියෙන්නේ)
+        val historyString = p.getString("clipboard_history", "") ?: ""
+        clipboardHistory.value = if (historyString.isEmpty()) emptyList() else historyString.split("|||")
     }
 
     fun setTheme(id: String) {
@@ -53,5 +60,19 @@ object Prefs {
     fun setPopup(b: Boolean) {
         popupOn.value = b
         prefs?.edit()?.putBoolean("popup", b)?.apply()
+    }
+    
+    // ⭐ අලුත් කෑල්ලක් Copy කරද්දි මේකට එකතු වෙනවා
+    fun addClipboardItem(text: String) {
+        if (text.isBlank()) return
+        val current = clipboardHistory.value.toMutableList()
+        if (current.contains(text)) current.remove(text) // එකම දේ දෙපාරක් ආවොත් උඩට ගන්නවා
+        current.add(0, text)
+        
+        val newList = if (current.size > 10) current.take(10) else current // උපරිම 10ක් තියාගන්නවා
+        clipboardHistory.value = newList
+        
+        // Save වෙන්න "|||" කියන ලකුණෙන් වෙන් කරලා save කරනවා
+        prefs?.edit()?.putString("clipboard_history", newList.joinToString("|||"))?.apply()
     }
 }

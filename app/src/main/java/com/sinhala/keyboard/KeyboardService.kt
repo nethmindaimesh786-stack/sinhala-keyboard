@@ -1,14 +1,17 @@
 package com.sinhala.keyboard
 
 import android.content.Context
+import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.TextView
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -42,31 +45,49 @@ class KeyboardService : InputMethodService(),
 
         lifecycleRegistry = LifecycleRegistry(this)
         savedStateRegistryController = SavedStateRegistryController.create(this)
+        
+        // ⭐ මේක තමයි crash එක හැදෙන තැන: performAttach අනිවාර්යයි
+        savedStateRegistryController.performAttach()
         savedStateRegistryController.performRestore(null)
+
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
     override fun onCreateInputView(): View {
-        return ComposeView(this).apply {
-            isFocusable = false
-            isFocusableInTouchMode = false
-            setViewTreeLifecycleOwner(this@KeyboardService)
-            setViewTreeViewModelStoreOwner(this@KeyboardService)
-            setViewTreeSavedStateRegistryOwner(this@KeyboardService)
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-            setContent {
-                KeyboardTheme {
-                    KeyboardUI(
-                        onCommit = { currentInputConnection?.commitText(it, 1) },
-                        onComposing = { currentInputConnection?.setComposingText(it, 1) },
-                        onDelete = { currentInputConnection?.deleteSurroundingText(1, 0) },
-                        onEnter = { sendEnter() },
-                        onKeyFeedback = { doFeedback() }
-                    )
+        return try {
+            ComposeView(this).apply {
+                isFocusable = false
+                isFocusableInTouchMode = false
+                setViewTreeLifecycleOwner(this@KeyboardService)
+                setViewTreeViewModelStoreOwner(this@KeyboardService)
+                setViewTreeSavedStateRegistryOwner(this@KeyboardService)
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setContent {
+                    KeyboardTheme {
+                        KeyboardUI(
+                            onCommit = { currentInputConnection?.commitText(it, 1) },
+                            onComposing = { currentInputConnection?.setComposingText(it, 1) },
+                            onDelete = { currentInputConnection?.deleteSurroundingText(1, 0) },
+                            onEnter = { sendEnter() },
+                            onKeyFeedback = { doFeedback() }
+                        )
+                    }
                 }
             }
+        } catch (e: Throwable) {
+            // Crash වෙනවා වෙනුවට error message එක පෙන්නන්න
+            e.printStackTrace()
+            val tv = TextView(this).apply {
+                text = "Keyboard Error: ${e.message}\n\n${e.stackTraceToString().take(300)}"
+                setTextColor(Color.RED)
+                setBackgroundColor(Color.WHITE)
+                textSize = 12f
+                gravity = Gravity.CENTER
+                setPadding(20, 20, 20, 20)
+            }
+            tv
         }
     }
 
@@ -98,8 +119,7 @@ class KeyboardService : InputMethodService(),
         if (Prefs.soundOn.value) {
             try {
                 audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.5f)
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -109,18 +129,10 @@ class KeyboardService : InputMethodService(),
         if ((opts and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0) {
             ic.commitText("\n", 1)
         } else {
-            ic.sendKeyEvent(
-                android.view.KeyEvent(
-                    android.view.KeyEvent.ACTION_DOWN,
-                    android.view.KeyEvent.KEYCODE_ENTER
-                )
-            )
-            ic.sendKeyEvent(
-                android.view.KeyEvent(
-                    android.view.KeyEvent.ACTION_UP,
-                    android.view.KeyEvent.KEYCODE_ENTER
-                )
-            )
+            ic.sendKeyEvent(android.view.KeyEvent(
+                android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER))
+            ic.sendKeyEvent(android.view.KeyEvent(
+                android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER))
         }
     }
 
@@ -129,13 +141,11 @@ class KeyboardService : InputMethodService(),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
                 vm.defaultVibrator.vibrate(
-                    VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE)
-                )
+                    VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
                 (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).vibrate(ms)
             }
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
     }
 }
